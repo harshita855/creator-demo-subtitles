@@ -45,3 +45,47 @@ export async function updateSegment(
   }
   return res.json();
 }
+
+export interface CreateUploadResponse {
+  upload_id: string;
+  filename: string;
+  status: string;
+}
+
+export async function uploadFile(file: File): Promise<CreateUploadResponse> {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const res = await fetch(`${API_URL}/api/uploads`, {
+    method: "POST",
+    body: formData,
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new Error(body?.error?.message ?? `Upload failed with status ${res.status}`);
+  }
+  return res.json();
+}
+
+export interface CreateJobResponse {
+  job_id: string;
+  status: string;
+}
+
+export async function createJob(params: {
+  upload_id: string;
+  source_language: string;
+  target_language: string;
+  translate: boolean;
+}): Promise<CreateJobResponse> {
+  const res = await fetch(`${API_URL}/api/jobs`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new Error(body?.error?.message ?? `Job creation failed with status ${res.status}`);
+  }
+  return res.json();
+}
