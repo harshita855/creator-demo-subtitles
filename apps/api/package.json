@@ -1,0 +1,33 @@
+{
+  "name": "@subtitle-app/api",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "postinstall": "prisma generate --schema=../../packages/shared/prisma/schema.prisma"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1085.0",
+    "@aws-sdk/s3-request-presigner": "^3.1086.0",
+    "@prisma/client": "^6.19.3",
+    "@subtitle-app/shared": "*",
+    "bullmq": "^5.80.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "express-rate-limit": "^8.5.2",
+    "multer": "^2.2.0"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/multer": "^2.2.0",
+    "@types/node": "^20.14.10",
+    "prisma": "^6.19.3",
+    "tsx": "^4.16.2",
+    "typescript": "^5.5.4"
+  }
+}

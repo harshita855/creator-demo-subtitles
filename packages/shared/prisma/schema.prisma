@@ -1,0 +1,105 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// --- Uploads --------------------------------------------------------------
+
+model Upload {
+  id               String   @id @default(cuid())
+  userId           String?
+  originalFilename String
+  storagePath      String
+  mimeType         String
+  fileSize         Int
+  duration         Float?
+  status           UploadStatus @default(uploading)
+  createdAt        DateTime @default(now())
+
+  jobs     Job[]
+  projects Project[]
+
+  @@map("uploads")
+}
+
+enum UploadStatus {
+  uploading
+  uploaded
+  validation_failed
+}
+
+// --- Jobs -------------------------------------------------------------------
+
+model Job {
+  id             String    @id @default(cuid())
+  uploadId       String
+  upload         Upload    @relation(fields: [uploadId], references: [id])
+  status         JobStatus @default(queued)
+  progress       Int       @default(0)
+  sourceLanguage String
+  targetLanguage String
+  translate      Boolean   @default(true)
+  errorCode      String?
+  errorMessage   String?
+  retryCount     Int       @default(0)
+  createdAt      DateTime  @default(now())
+  completedAt    DateTime?
+
+  project Project?
+
+  @@index([uploadId])
+  @@map("jobs")
+}
+
+enum JobStatus {
+  queued
+  uploading
+  extracting_audio
+  transcribing
+  translating
+  formatting
+  completed
+  failed
+}
+
+// --- Projects -----------------------------------------------------------------
+
+model Project {
+  id             String   @id @default(cuid())
+  uploadId       String
+  upload         Upload   @relation(fields: [uploadId], references: [id])
+  jobId          String   @unique
+  job            Job      @relation(fields: [jobId], references: [id])
+  title          String?
+  sourceLanguage String
+  targetLanguage String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  segments SubtitleSegment[]
+
+  @@index([uploadId])
+  @@map("projects")
+}
+
+// --- Subtitle segments ----------------------------------------------------
+
+model SubtitleSegment {
+  id             String   @id @default(cuid())
+  projectId      String
+  project        Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sequenceNumber Int
+  startTime      Float
+  endTime        Float
+  originalText   String
+  translatedText String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([projectId])
+  @@map("subtitle_segments")
+}

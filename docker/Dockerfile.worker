@@ -1,0 +1,23 @@
+FROM node:20-bullseye
+
+RUN apt-get update && apt-get install -y ffmpeg && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY tsconfig.base.json ./
+COPY package.json ./
+COPY apps/worker/package.json ./apps/worker/package.json
+COPY packages/shared/package.json ./packages/shared/package.json
+
+RUN npm install --ignore-scripts
+
+COPY packages/shared ./packages/shared
+COPY apps/worker ./apps/worker
+
+WORKDIR /app/packages/shared
+RUN npm run build
+RUN npx prisma generate --schema=prisma/schema.prisma
+
+WORKDIR /app/apps/worker
+
+CMD ["npm", "run", "dev"]
