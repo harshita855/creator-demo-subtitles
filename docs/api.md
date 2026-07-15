@@ -186,6 +186,66 @@ official standard exists for bilingual SRT).
 
 ---
 
+## GET /api/tts/options
+List the available text-to-speech voices, models, languages, and limits.
+Used by the frontend so these are never hardcoded client-side.
+
+**Response `200`:**
+```json
+{
+  "voices": [{ "id": "EXAVITQu4vr4xnSDxMaL", "name": "Sarah", "description": "Female · American · soft" }],
+  "models": [{ "id": "eleven_flash_v2_5", "name": "Flash v2.5", "description": "Fastest · 30+ languages" }],
+  "languages": [{ "code": "auto", "label": "Auto-detect" }],
+  "maxChars": 5000,
+  "defaultVoiceId": "EXAVITQu4vr4xnSDxMaL",
+  "defaultModelId": "eleven_flash_v2_5"
+}
+```
+
+---
+
+## POST /api/tts
+Synthesize speech from text. Returns an audio file (mp3). The provider
+API key is held server-side only and never exposed to the client.
+
+**Request body:**
+```json
+{
+  "text": "Text to speak (max 5000 chars)",
+  "voiceId": "EXAVITQu4vr4xnSDxMaL",
+  "modelId": "eleven_flash_v2_5",
+  "languageCode": "auto",
+  "speed": 1.0
+}
+```
+`voiceId` / `modelId` / `languageCode` fall back to defaults if omitted or
+unknown; `speed` is clamped to 0.7–1.2.
+
+**Response `200`:** `audio/mpeg` bytes (`X-Credits-Used` header when the
+provider reports it).
+
+**Errors:** `E_VALIDATION` (empty or too-long text), `E_TTS_UNAVAILABLE`
+(502/503/429 from provider), `E_TTS_PAYMENT_REQUIRED` (402 — premium voice
+or plan needed)
+
+---
+
+## POST /api/tts/clone
+Create a cloned voice from uploaded audio samples. Wired and ready, but
+provider voice cloning requires a paid plan — on a free plan this returns
+`E_TTS_PAYMENT_REQUIRED`.
+
+**Request:** `multipart/form-data` — `name` (string) + `samples` (1–5 audio files)
+
+**Response `201`:**
+```json
+{ "voice_id": "cloned-voice-id", "name": "My Voice" }
+```
+
+**Errors:** `E_VALIDATION`, `E_TTS_PAYMENT_REQUIRED` (402), `E_TTS_UNAVAILABLE`
+
+---
+
 ## GET /health
 Health check. Returns `200 { "status": "ok", "service": "api" }`.
 No auth, no rate limiting.
@@ -210,4 +270,6 @@ No auth, no rate limiting.
 | `E_PROCESSING_TIMEOUT` | Job exceeded the configured processing time limit |
 | `E_JOB_WORKER_FAILURE` | Worker processing failed for an unclassified reason |
 | `E_DUPLICATE_REQUEST` | Unique constraint violation |
+| `E_TTS_UNAVAILABLE` | Speech provider unreachable / rate-limited / errored |
+| `E_TTS_PAYMENT_REQUIRED` | Speech action needs a paid plan (premium voice or cloning) |
 | `E_INTERNAL` | Unhandled server error (detail logged server-side only) |

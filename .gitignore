@@ -18,3 +18,6 @@ tmp/
 .DS_Store
 .vscode/*
 !.vscode/extensions.json
+
+# TypeScript incremental build info
+*.tsbuildinfo

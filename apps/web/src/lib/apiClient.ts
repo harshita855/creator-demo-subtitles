@@ -1,4 +1,4 @@
-import type { JobStatusResponse, ProjectResponse, SubtitleSegment } from "./types";
+import type { JobStatusResponse, ProjectResponse, SubtitleSegment, TtsOptions, SynthesizeParams } from "./types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -154,4 +154,37 @@ export async function addSegment(
     throw new Error(body?.error?.message ?? `Add segment failed with status ${res.status}`);
   }
   return res.json();
+}
+
+// --- Text-to-speech ---
+
+export async function fetchTtsOptions(): Promise<TtsOptions> {
+  const res = await fetch(`${API_URL}/api/tts/options`);
+  if (!res.ok) {
+    throw new Error(`Failed to load speech options (status ${res.status}).`);
+  }
+  return res.json();
+}
+
+export interface SynthesizeResult {
+  blob: Blob;
+  creditsUsed: string | null;
+}
+
+export async function synthesizeSpeech(
+  params: SynthesizeParams
+): Promise<SynthesizeResult> {
+  const res = await fetch(`${API_URL}/api/tts`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new Error(body?.error?.message ?? `Speech generation failed (status ${res.status}).`);
+  }
+  return {
+    blob: await res.blob(),
+    creditsUsed: res.headers.get("x-credits-used"),
+  };
 }
