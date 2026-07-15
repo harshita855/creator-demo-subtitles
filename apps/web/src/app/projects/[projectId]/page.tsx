@@ -190,6 +190,7 @@ export default function EditorPage() {
           <div className="flex flex-wrap gap-2">
             {exportOptions.map((opt) => (
               
+              <a
                 key={opt.label}
                 href={`${API_URL}/api/projects/${project.project_id}/export?language=${opt.language}&format=${opt.format}`}
                 download
