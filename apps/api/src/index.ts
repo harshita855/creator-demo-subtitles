@@ -8,13 +8,14 @@ import { ensureBucketExists } from "./lib/storage";
 import jobsRouter from "./routes/jobs";
 import projectsRouter from "./routes/projects";
 import exportRouter from "./routes/export";
+import ttsRouter from "./routes/tts";
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT ? Number(process.env.PORT) : 4000;
 
-app.use(cors());
+app.use(cors({ exposedHeaders: ["X-Credits-Used", "Content-Disposition"] }));
 app.use(express.json());
 
 app.get("/health", (_req, res) => {
@@ -25,6 +26,7 @@ app.use("/api/uploads", uploadsRouter);
 app.use("/api/jobs", jobsRouter);
 app.use("/api/projects", projectsRouter);
 app.use("/api/projects", exportRouter);
+app.use("/api/tts", ttsRouter);
 
 // Catch any request that didn't match a real route above - keeps the
 // error shape consistent instead of falling through to Express's

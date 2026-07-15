@@ -27,17 +27,24 @@ export function SubtitleSegmentRow({
 
   return (
     <div
-      className={`cursor-pointer rounded-md border p-3 transition-colors ${
-        isActive ? "border-blue-400 bg-blue-50" : "border-gray-200 bg-white"
-      }`}
+      className="cursor-pointer rounded-xl border p-3 transition-colors"
+      style={{
+        borderColor: isActive ? "var(--accent)" : "var(--card-border)",
+        backgroundColor: isActive ? "var(--accent-soft)" : "var(--card-bg)",
+      }}
       onClick={() => onSeek(segment.startTime)}
     >
-      <div className="mb-2 text-xs font-medium text-gray-400">
+      <div className="mb-2 text-xs font-semibold" style={{ color: "var(--accent)" }}>
         {formatTime(segment.startTime)} &rarr; {formatTime(segment.endTime)}
       </div>
 
       <textarea
-        className="mb-2 w-full resize-none rounded border border-gray-200 p-2 text-sm text-gray-900 focus:border-blue-400 focus:outline-none"
+        className="mb-2 w-full resize-none rounded-lg border p-2 text-sm focus:outline-none"
+        style={{
+          backgroundColor: "var(--input-bg)",
+          borderColor: "var(--input-border)",
+          color: "var(--text-primary)",
+        }}
         rows={2}
         value={originalText}
         onClick={(e) => e.stopPropagation()}
@@ -50,7 +57,12 @@ export function SubtitleSegmentRow({
       />
 
       <textarea
-        className="w-full resize-none rounded border border-gray-100 bg-gray-50 p-2 text-sm text-gray-700 focus:border-blue-400 focus:outline-none"
+        className="w-full resize-none rounded-lg border p-2 text-sm focus:outline-none"
+        style={{
+          backgroundColor: "var(--input-bg)",
+          borderColor: "var(--input-border)",
+          color: "var(--text-secondary)",
+        }}
         rows={2}
         value={translatedText}
         onClick={(e) => e.stopPropagation()}

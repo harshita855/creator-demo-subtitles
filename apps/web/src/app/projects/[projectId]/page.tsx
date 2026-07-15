@@ -1,16 +1,18 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { fetchProject, updateSegment } from "@/lib/apiClient";
 import type { ProjectResponse } from "@/lib/types";
 import { VideoPlayer } from "@/components/VideoPlayer";
 import { SubtitleSegmentRow } from "@/components/SubtitleSegmentRow";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const HANDOFF_KEY = "tts:handoff-text";
 
 export default function EditorPage() {
   const params = useParams<{ projectId: string }>();
+  const router = useRouter();
   const [project, setProject] = useState<ProjectResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
@@ -59,6 +61,22 @@ export default function EditorPage() {
     }
   }
 
+  // "Voice this": stash the chosen subtitle text and open the TTS studio,
+  // which auto-loads it. No re-upload needed.
+  function voiceThis(which: "original" | "translated") {
+    if (!project) return;
+    const text = project.segments
+      .map((s) => (which === "translated" ? s.translatedText : s.originalText))
+      .filter((t) => t && t.trim().length > 0)
+      .join(" ");
+    try {
+      sessionStorage.setItem(HANDOFF_KEY, text);
+    } catch {
+      /* ignore */
+    }
+    router.push("/tts");
+  }
+
   const activeSegment = project?.segments.find(
     (s) => currentTime >= s.startTime && currentTime < s.endTime
   );
@@ -66,7 +84,7 @@ export default function EditorPage() {
   if (error) {
     return (
       <main className="flex min-h-screen items-center justify-center p-8">
-        <p className="text-red-600">Couldn&apos;t load project: {error}</p>
+        <p className="text-red-500">Couldn&apos;t load project: {error}</p>
       </main>
     );
   }
@@ -74,7 +92,7 @@ export default function EditorPage() {
   if (!project) {
     return (
       <main className="flex min-h-screen items-center justify-center p-8">
-        <p className="text-gray-500">Loading project...</p>
+        <p style={{ color: "var(--text-secondary)" }}>Loading project…</p>
       </main>
     );
   }
@@ -87,21 +105,60 @@ export default function EditorPage() {
     { label: "Translated (.txt)", language: "translated", format: "txt" },
   ];
 
+  const cardStyle = {
+    backgroundColor: "var(--card-bg)",
+    borderColor: "var(--card-border)",
+  };
+  const pillStyle = {
+    backgroundColor: "var(--input-bg)",
+    borderColor: "var(--input-border)",
+    color: "var(--text-primary)",
+  };
+
   return (
-    <main className="grid min-h-screen grid-cols-1 gap-6 p-6 md:grid-cols-2">
-      <div>
+    <main className="grid min-h-screen grid-cols-1 gap-6 px-6 pb-16 pt-20 md:grid-cols-2">
+      <div className="flex flex-col gap-6">
         <VideoPlayer ref={videoRef} src={project.video_url} />
 
-        <div className="mt-6 rounded-lg border border-gray-200 p-4">
-          <h2 className="mb-3 text-sm font-semibold text-gray-900">Export</h2>
+        {/* Text to speech */}
+        <div className="rounded-2xl border p-5" style={cardStyle}>
+          <h2 className="mb-1 text-sm font-bold" style={{ color: "var(--text-primary)" }}>
+            🔊 Text to speech
+          </h2>
+          <p className="mb-3 text-xs" style={{ color: "var(--text-secondary)" }}>
+            Send these subtitles to the TTS studio and generate spoken audio.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => voiceThis("original")}
+              className="rounded-full px-4 py-2 text-xs font-semibold text-white transition-transform hover:scale-[1.02]"
+              style={{ backgroundColor: "var(--accent)" }}
+            >
+              Voice original →
+            </button>
+            <button
+              onClick={() => voiceThis("translated")}
+              className="rounded-full border px-4 py-2 text-xs font-semibold transition-colors"
+              style={pillStyle}
+            >
+              Voice translation →
+            </button>
+          </div>
+        </div>
+
+        {/* Export */}
+        <div className="rounded-2xl border p-5" style={cardStyle}>
+          <h2 className="mb-3 text-sm font-bold" style={{ color: "var(--text-primary)" }}>
+            Export
+          </h2>
           <div className="flex flex-wrap gap-2">
             {exportOptions.map((opt) => (
-              
               <a
                 key={opt.label}
                 href={`${API_URL}/api/projects/${project.project_id}/export?language=${opt.language}&format=${opt.format}`}
                 download
-                className="rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:border-blue-400 hover:text-blue-600"
+                className="rounded-full border px-4 py-1.5 text-xs font-medium transition-colors hover:opacity-80"
+                style={pillStyle}
               >
                 {opt.label}
               </a>
@@ -110,8 +167,10 @@ export default function EditorPage() {
         </div>
       </div>
 
-      <div className="flex flex-col gap-3 overflow-y-auto">
-        <h2 className="text-lg font-semibold text-gray-900">Subtitles</h2>
+      <div className="flex flex-col gap-3 md:max-h-screen md:overflow-y-auto">
+        <h2 className="text-lg font-bold" style={{ color: "var(--text-primary)" }}>
+          Subtitles
+        </h2>
         {project.segments.map((segment) => (
           <SubtitleSegmentRow
             key={segment.id}

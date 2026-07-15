@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FileDropzone } from "@/components/FileDropzone";
 import { LanguageSelect } from "@/components/LanguageSelect";
@@ -49,14 +50,23 @@ export default function UploadPage() {
   }
 
   return (
-    <main className="flex min-h-screen flex-col items-center px-6 py-24">
+    <main className="flex min-h-screen flex-col items-center px-6 pb-24 pt-20">
+      <div className="mb-6 w-full max-w-lg text-center">
+        <p className="text-xs font-bold uppercase tracking-wide" style={{ color: "var(--accent)" }}>
+          Video → Subtitles
+        </p>
+        <h1 className="mt-1 text-3xl font-extrabold" style={{ color: "var(--text-primary)" }}>
+          Upload your video
+        </h1>
+        <p className="mt-2 text-sm" style={{ color: "var(--text-secondary)" }}>
+          We&apos;ll transcribe it, translate it, and hand you an editable subtitle track.
+        </p>
+      </div>
+
       <div
         className="w-full max-w-lg rounded-2xl border p-8"
         style={{ backgroundColor: "var(--card-bg)", borderColor: "var(--card-border)" }}
       >
-        <h1 className="mb-6 text-2xl font-bold" style={{ color: "var(--text-primary)" }}>
-          Upload your video
-        </h1>
 
         {/* Source toggle */}
         <div
@@ -145,6 +155,13 @@ export default function UploadPage() {
           {isSubmitting ? "Processing..." : "Upload and process"}
         </button>
       </div>
+
+      <p className="mt-6 text-center text-xs" style={{ color: "var(--text-secondary)" }}>
+        Just want to turn text into speech?{" "}
+        <Link href="/tts" className="font-semibold underline" style={{ color: "var(--accent)" }}>
+          Open the TTS studio
+        </Link>
+      </p>
     </main>
   );
 }

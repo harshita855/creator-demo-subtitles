@@ -102,3 +102,37 @@ export async function uploadYoutubeUrl(url: string): Promise<CreateUploadRespons
   }
   return res.json();
 }
+
+// --- Text-to-speech ---
+import type { TtsOptions, SynthesizeParams } from "./types";
+
+export async function fetchTtsOptions(): Promise<TtsOptions> {
+  const res = await fetch(`${API_URL}/api/tts/options`);
+  if (!res.ok) {
+    throw new Error(`Failed to load speech options (status ${res.status}).`);
+  }
+  return res.json();
+}
+
+export interface SynthesizeResult {
+  blob: Blob;
+  creditsUsed: string | null;
+}
+
+export async function synthesizeSpeech(
+  params: SynthesizeParams
+): Promise<SynthesizeResult> {
+  const res = await fetch(`${API_URL}/api/tts`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new Error(body?.error?.message ?? `Speech generation failed (status ${res.status}).`);
+  }
+  return {
+    blob: await res.blob(),
+    creditsUsed: res.headers.get("x-credits-used"),
+  };
+}
