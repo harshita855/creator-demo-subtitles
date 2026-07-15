@@ -33,27 +33,40 @@ export function FileDropzone({ onFileSelected, selectedFile }: FileDropzoneProps
       }}
       onDragLeave={() => setIsDragging(false)}
       onDrop={handleDrop}
-      className={`flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed p-10 text-center transition-colors ${
-        isDragging ? "border-blue-400 bg-blue-50" : "border-gray-300 bg-gray-50"
-      }`}
+      className="flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed p-10 text-center transition-colors"
+      style={{
+        borderColor: isDragging ? "var(--accent)" : "var(--input-border)",
+        backgroundColor: isDragging ? "var(--accent-soft)" : "var(--input-bg)",
+      }}
     >
       {selectedFile ? (
         <>
-          <p className="text-sm font-medium text-gray-900">{selectedFile.name}</p>
-          <p className="text-xs text-gray-500">
+          <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+            {selectedFile.name}
+          </p>
+          <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
             {(selectedFile.size / (1024 * 1024)).toFixed(1)} MB
           </p>
         </>
       ) : (
         <>
-          <p className="text-sm text-gray-600">
+          <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
             Drag and drop a video or audio file here
           </p>
-          <p className="text-xs text-gray-400">MP4, MOV, WEBM, MP3, WAV, M4A</p>
+          <p className="text-xs uppercase tracking-wide" style={{ color: "var(--text-secondary)" }}>
+            MP4, MOV, WEBM, MP3, WAV, M4A
+          </p>
         </>
       )}
 
-      <label className="mt-2 cursor-pointer rounded-md border border-gray-300 bg-white px-4 py-1.5 text-sm font-medium text-gray-700 hover:border-blue-400 hover:text-blue-600">
+      <label
+        className="mt-2 cursor-pointer rounded-full border px-5 py-2 text-sm font-semibold transition-colors"
+        style={{
+          borderColor: "var(--card-border)",
+          backgroundColor: "var(--card-bg)",
+          color: "var(--text-primary)",
+        }}
+      >
         Choose file
         <input
           type="file"

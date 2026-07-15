@@ -1,3 +1,48 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+:root[data-theme="dark"] {
+  --bg: #0a0a12;
+  --card-bg: #12121e;
+  --card-border: #23233a;
+  --text-primary: #f5f5fa;
+  --text-secondary: #8b8ba3;
+  --accent: #7c6fee;
+  --accent-soft: rgba(124, 111, 238, 0.15);
+  --input-bg: #0a0a12;
+  --input-border: #2a2a42;
+  --pill-bg: #12121e;
+}
+
+:root[data-theme="light"] {
+  --bg: #eceffc;
+  --card-bg: #f7f8fe;
+  --card-border: #dcdff5;
+  --text-primary: #14142b;
+  --text-secondary: #8a8aa3;
+  --accent: #7c6fee;
+  --accent-soft: rgba(124, 111, 238, 0.12);
+  --input-bg: #ffffff;
+  --input-border: #d8dbf0;
+  --pill-bg: #ffffff;
+}
+
+:root[data-theme="beige"] {
+  --bg: #efe6d8;
+  --card-bg: #f7f0e4;
+  --card-border: #e0d3ba;
+  --text-primary: #2b2013;
+  --text-secondary: #9c8f78;
+  --accent: #7c6fee;
+  --accent-soft: rgba(124, 111, 238, 0.12);
+  --input-bg: #fbf6ee;
+  --input-border: #e6d9c0;
+  --pill-bg: #fbf6ee;
+}
+
+body {
+  background-color: var(--bg);
+  color: var(--text-primary);
+  transition: background-color 0.2s ease, color 0.2s ease;
+}

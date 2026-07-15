@@ -31,12 +31,19 @@ export function LanguageSelect({
     : LANGUAGES;
 
   return (
-    <div className="flex flex-col gap-1">
-      <label className="text-xs font-medium text-gray-600">{label}</label>
+    <div className="flex flex-col gap-1.5">
+      <label className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
+        {label}
+      </label>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-blue-400 focus:outline-none"
+        className="rounded-xl border px-4 py-2.5 text-sm font-medium focus:outline-none"
+        style={{
+          backgroundColor: "var(--input-bg)",
+          borderColor: "var(--input-border)",
+          color: "var(--text-primary)",
+        }}
       >
         {options.map((lang) => (
           <option key={lang.code} value={lang.code}>

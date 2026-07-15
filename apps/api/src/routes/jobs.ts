@@ -10,9 +10,11 @@ import {
 import { writeRateLimiter } from "../middleware/rateLimiter";
 
 const router = Router();
-router.use(writeRateLimiter);
 
-router.post("/", async (req, res, next) => {
+// Rate limit only applies to job CREATION - the frontend polls
+// GET /:jobId every 2 seconds for live progress, which is expected,
+// legitimate traffic and should never be throttled.
+router.post("/", writeRateLimiter, async (req, res, next) => {
   try {
     const parsed = CreateJobRequestSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -57,9 +59,6 @@ router.post("/", async (req, res, next) => {
 
 router.get("/:jobId", async (req, res, next) => {
   try {
-    // Include the linked project - once the worker finishes, it creates
-    // exactly one Project per Job (see schema.prisma), so this tells the
-    // frontend where to send the user next without a separate lookup.
     const job = await prisma.job.findUnique({
       where: { id: req.params.jobId },
       include: { project: true },
@@ -67,7 +66,6 @@ router.get("/:jobId", async (req, res, next) => {
     if (!job) {
       throw new AppError("E_NOT_FOUND", "Job not found.", 404);
     }
-
     const response: JobStatusResponse & { project_id: string | null } = {
       job_id: job.id,
       status: job.status,

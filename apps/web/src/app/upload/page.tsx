@@ -4,27 +4,37 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { FileDropzone } from "@/components/FileDropzone";
 import { LanguageSelect } from "@/components/LanguageSelect";
-import { uploadFile, createJob } from "@/lib/apiClient";
+import { uploadFile, uploadYoutubeUrl, createJob } from "@/lib/apiClient";
+
+type Source = "file" | "youtube";
 
 export default function UploadPage() {
   const router = useRouter();
+  const [source, setSource] = useState<Source>("file");
   const [file, setFile] = useState<File | null>(null);
+  const [youtubeUrl, setYoutubeUrl] = useState("");
   const [sourceLanguage, setSourceLanguage] = useState("auto");
   const [targetLanguage, setTargetLanguage] = useState("en");
   const [translate, setTranslate] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const canSubmit = source === "file" ? !!file : youtubeUrl.trim().length > 0;
+
   async function handleSubmit() {
-    if (!file) {
-      setError("Please choose a file first.");
+    if (!canSubmit) {
+      setError(source === "file" ? "Please choose a file first." : "Please paste a YouTube URL first.");
       return;
     }
     setError(null);
     setIsSubmitting(true);
 
     try {
-      const upload = await uploadFile(file);
+      const upload =
+        source === "file"
+          ? await uploadFile(file!)
+          : await uploadYoutubeUrl(youtubeUrl.trim());
+
       const job = await createJob({
         upload_id: upload.upload_id,
         source_language: sourceLanguage,
@@ -39,13 +49,62 @@ export default function UploadPage() {
   }
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center gap-6 p-8">
-      <div className="w-full max-w-lg rounded-lg border border-gray-200 p-8 shadow-sm">
-        <h1 className="mb-6 text-xl font-semibold text-gray-900">
+    <main className="flex min-h-screen flex-col items-center px-6 py-24">
+      <div
+        className="w-full max-w-lg rounded-2xl border p-8"
+        style={{ backgroundColor: "var(--card-bg)", borderColor: "var(--card-border)" }}
+      >
+        <h1 className="mb-6 text-2xl font-bold" style={{ color: "var(--text-primary)" }}>
           Upload your video
         </h1>
 
-        <FileDropzone onFileSelected={setFile} selectedFile={file} />
+        {/* Source toggle */}
+        <div
+          className="mb-6 flex gap-1 rounded-full border p-1"
+          style={{ borderColor: "var(--card-border)" }}
+        >
+          {(["file", "youtube"] as Source[]).map((opt) => {
+            const isActive = source === opt;
+            return (
+              <button
+                key={opt}
+                onClick={() => setSource(opt)}
+                className="flex-1 rounded-full px-4 py-2 text-sm font-semibold transition-colors"
+                style={{
+                  backgroundColor: isActive ? "var(--accent)" : "transparent",
+                  color: isActive ? "#fff" : "var(--text-secondary)",
+                }}
+              >
+                {opt === "file" ? "Upload a file" : "Paste YouTube URL"}
+              </button>
+            );
+          })}
+        </div>
+
+        {source === "file" ? (
+          <FileDropzone onFileSelected={setFile} selectedFile={file} />
+        ) : (
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
+              YouTube URL
+            </label>
+            <input
+              type="text"
+              value={youtubeUrl}
+              onChange={(e) => setYoutubeUrl(e.target.value)}
+              placeholder="https://www.youtube.com/watch?v=..."
+              className="rounded-xl border px-4 py-2.5 text-sm focus:outline-none"
+              style={{
+                backgroundColor: "var(--input-bg)",
+                borderColor: "var(--input-border)",
+                color: "var(--text-primary)",
+              }}
+            />
+            <p className="mt-1 text-xs" style={{ color: "var(--text-secondary)" }}>
+              Works with regular videos and Shorts. Downloaded and processed on our server.
+            </p>
+          </div>
+        )}
 
         <div className="mt-6 grid grid-cols-2 gap-4">
           <LanguageSelect
@@ -61,7 +120,10 @@ export default function UploadPage() {
           />
         </div>
 
-        <label className="mt-4 flex items-center gap-2 text-sm text-gray-700">
+        <label
+          className="mt-4 flex items-center gap-2 text-sm font-medium"
+          style={{ color: "var(--text-primary)" }}
+        >
           <input
             type="checkbox"
             checked={translate}
@@ -70,14 +132,17 @@ export default function UploadPage() {
           Translate subtitles (uncheck for transcription only)
         </label>
 
-        {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
+        {error && (
+          <p className="mt-4 text-sm font-medium text-red-500">{error}</p>
+        )}
 
         <button
           onClick={handleSubmit}
-          disabled={isSubmitting || !file}
-          className="mt-6 w-full rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-300"
+          disabled={isSubmitting || !canSubmit}
+          className="mt-6 w-full rounded-full px-4 py-3 text-sm font-bold text-white transition-transform disabled:cursor-not-allowed disabled:opacity-50"
+          style={{ backgroundColor: "var(--accent)" }}
         >
-          {isSubmitting ? "Uploading..." : "Upload and process"}
+          {isSubmitting ? "Processing..." : "Upload and process"}
         </button>
       </div>
     </main>
