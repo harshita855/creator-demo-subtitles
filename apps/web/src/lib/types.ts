@@ -16,16 +16,14 @@ export interface JobStatusResponse {
   project_id: string | null;
 }
 
+// Matches the spec's exact API shape (§7) - snake_case, matching what
+// the backend now actually returns from GET/POST/PATCH on segments.
 export interface SubtitleSegment {
   id: string;
-  projectId: string;
-  sequenceNumber: number;
-  startTime: number;
-  endTime: number;
-  originalText: string;
-  translatedText: string;
-  createdAt: string;
-  updatedAt: string;
+  start: number;
+  end: number;
+  original_text: string;
+  translated_text: string;
 }
 
 export interface ProjectResponse {

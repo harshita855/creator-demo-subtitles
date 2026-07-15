@@ -17,8 +17,30 @@ Upload a video/audio file.
 { "upload_id": "cuid", "filename": "video.mp4", "status": "uploaded" }
 ```
 
-**Errors:** `E_VALIDATION` (no file), `E_CORRUPTED_MEDIA`, `E_MISSING_AUDIO_STREAM`,
-`E_VIDEO_TOO_LONG`, `E_FILE_TOO_LARGE` (413), `E_STORAGE_FAILURE` (502)
+**Errors:** `E_VALIDATION`, `E_CORRUPTED_MEDIA`, `E_MISSING_AUDIO_STREAM`,
+`E_VIDEO_TOO_LONG`, `E_FILE_TOO_LARGE` (413), `E_STORAGE_FAILURE` (502),
+`E_UPLOAD_INTERRUPTED` (if the client disconnects mid-upload)
+
+Rate limited: 30 requests / 15 minutes / IP.
+
+---
+
+## POST /api/uploads/youtube
+Import a video by YouTube URL instead of a file upload. Downloaded
+server-side (yt-dlp), then runs through the same validation/storage
+path as a regular upload.
+
+**Request body:**
+```json
+{ "url": "https://www.youtube.com/watch?v=..." }
+```
+Works with regular videos and Shorts.
+
+**Response `201`:** same shape as `POST /api/uploads`.
+
+**Errors:** `E_VALIDATION` (missing/malformed URL), `E_CORRUPTED_MEDIA`
+(video unavailable, private, age-restricted, or the download failed),
+`E_STORAGE_FAILURE`
 
 Rate limited: 30 requests / 15 minutes / IP.
 
@@ -36,13 +58,16 @@ Create a transcription/translation job for an uploaded file.
   "translate": true
 }
 ```
+`source_language: "auto"` triggers automatic spoken-language detection.
 
 **Response `201`:**
 ```json
 { "job_id": "cuid", "status": "queued" }
 ```
 
-Rate limited: 30 requests / 15 minutes / IP.
+Rate limited: 30 requests / 15 minutes / IP (job creation only - the
+status-polling endpoint below is not rate limited, since the frontend
+polls it every 2 seconds as expected, legitimate traffic).
 
 ---
 
@@ -56,19 +81,22 @@ until status is `completed` or `failed`.
   "job_id": "cuid",
   "status": "transcribing",
   "progress": 40,
-  "error": null
+  "error": null,
+  "project_id": null
 }
 ```
 
 `status` is one of: `queued`, `extracting_audio`, `transcribing`,
 `translating`, `formatting`, `completed`, `failed`.
 
+`project_id` is `null` until the job completes, then contains the ID
+of the Project the worker created - lets the frontend link straight
+to the editor without a separate lookup.
+
 ---
 
 ## GET /api/projects/:projectId
-Fetch the full project - video URL and all subtitle segments. Called
-once the associated job reaches `completed` (a Project is created by
-the worker at that point, linked via the Job).
+Fetch the full project - video URL and all subtitle segments.
 
 **Response `200`:**
 ```json
@@ -80,14 +108,10 @@ the worker at that point, linked via the Job).
   "segments": [
     {
       "id": "cuid",
-      "projectId": "cuid",
-      "sequenceNumber": 1,
-      "startTime": 0.0,
-      "endTime": 2.5,
-      "originalText": "...",
-      "translatedText": "...",
-      "createdAt": "...",
-      "updatedAt": "..."
+      "start": 1.2,
+      "end": 4.8,
+      "original_text": "...",
+      "translated_text": "..."
     }
   ]
 }
@@ -113,7 +137,7 @@ what changed.
 }
 ```
 
-**Response `200`:** the updated segment (same shape as above).
+**Response `200`:** the updated segment (same shape as segments above).
 
 **Errors:** `E_VALIDATION`, `E_NOT_FOUND` (404), `E_INVALID_TIMESTAMPS`
 (if the resulting start/end combination is invalid)
@@ -158,16 +182,13 @@ Bilingual format puts original text and translated text on two lines
 within the same subtitle block (our own convention - no single
 official standard exists for bilingual SRT).
 
-**Errors:** `E_NOT_FOUND` (404), `E_INVALID_TIMESTAMPS` (if underlying
-segment data is somehow invalid - should not normally occur given
-PATCH/POST validation)
+**Errors:** `E_NOT_FOUND` (404), `E_INVALID_TIMESTAMPS`
 
 ---
 
 ## GET /health
 Health check. Returns `200 { "status": "ok", "service": "api" }`.
-No auth, no rate limiting - used by Docker/orchestration to confirm
-the container is ready.
+No auth, no rate limiting.
 
 ---
 
@@ -177,12 +198,16 @@ the container is ready.
 |---|---|
 | `E_VALIDATION` | Request body failed schema validation |
 | `E_NOT_FOUND` | Referenced resource doesn't exist |
-| `E_CORRUPTED_MEDIA` | Uploaded file isn't readable as valid media |
+| `E_CORRUPTED_MEDIA` | Uploaded/downloaded file isn't readable as valid media |
 | `E_MISSING_AUDIO_STREAM` | File has no audio track |
 | `E_VIDEO_TOO_LONG` | Exceeds `MAX_VIDEO_DURATION_SECONDS` |
 | `E_FILE_TOO_LARGE` | Exceeds `MAX_UPLOAD_SIZE_MB` |
+| `E_UPLOAD_INTERRUPTED` | Client disconnected before the upload completed |
 | `E_STORAGE_FAILURE` | Object storage write/read failed |
 | `E_INVALID_TIMESTAMPS` | Segment start/end combination invalid |
-| `E_JOB_WORKER_FAILURE` | Worker processing failed unexpectedly |
+| `E_ASR_UNAVAILABLE` | Transcription provider (Groq/Whisper) unreachable or erroring |
+| `E_TRANSLATION_UNAVAILABLE` | Translation provider (Groq/LLM) unreachable or erroring |
+| `E_PROCESSING_TIMEOUT` | Job exceeded the configured processing time limit |
+| `E_JOB_WORKER_FAILURE` | Worker processing failed for an unclassified reason |
 | `E_DUPLICATE_REQUEST` | Unique constraint violation |
 | `E_INTERNAL` | Unhandled server error (detail logged server-side only) |

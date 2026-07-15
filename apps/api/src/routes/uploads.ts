@@ -28,13 +28,34 @@ const upload = multer({
 router.post("/", upload.single("file"), async (req, res, next) => {
   const file = req.file;
   const tempPath = file?.path;
+
+  // Detects the client disconnecting mid-request (closed tab, dropped
+  // connection, network failure during upload) - Node emits "close"
+  // on the request object in this case, and req.aborted confirms it
+  // wasn't a normal completed request.
+  let clientDisconnected = false;
+  req.on("close", () => {
+    if (req.aborted) {
+      clientDisconnected = true;
+    }
+  });
+
   try {
     if (!file) {
+      if (clientDisconnected) {
+        throw new AppError(
+          "E_UPLOAD_INTERRUPTED",
+          "The upload was interrupted before it could complete.",
+          400
+        );
+      }
       throw new AppError("E_VALIDATION", "No file was provided.", 400);
     }
+
     const { durationSeconds } = await validateMediaFile(file.path);
     const safeFilename = sanitizeFilename(file.originalname);
     const storageKey = `uploads/${crypto.randomUUID()}-${safeFilename}`;
+
     try {
       await uploadFileToStorage(file.path, storageKey, file.mimetype);
     } catch (storageErr) {
@@ -45,6 +66,7 @@ router.post("/", upload.single("file"), async (req, res, next) => {
         502
       );
     }
+
     const record = await prisma.upload.create({
       data: {
         originalFilename: file.originalname,
@@ -55,14 +77,23 @@ router.post("/", upload.single("file"), async (req, res, next) => {
         status: "uploaded",
       },
     });
+
     const response: CreateUploadResponse = {
       upload_id: record.id,
       filename: record.originalFilename,
       status: "uploaded",
     };
+
     res.status(201).json(response);
   } catch (err) {
-    next(err);
+    // If the client already disconnected, res.json() above would be a
+    // no-op anyway - but we still want the error properly classified
+    // for logging/consistency even though no response can be sent.
+    if (clientDisconnected && !(err instanceof AppError && err.code === "E_UPLOAD_INTERRUPTED")) {
+      next(new AppError("E_UPLOAD_INTERRUPTED", "The upload was interrupted before it could complete.", 400));
+    } else {
+      next(err);
+    }
   } finally {
     if (tempPath) {
       fs.unlink(tempPath, () => {});
@@ -70,9 +101,6 @@ router.post("/", upload.single("file"), async (req, res, next) => {
   }
 });
 
-// POST /api/uploads/youtube - import a video by URL instead of a file.
-// Downloads server-side with yt-dlp, then runs through the exact same
-// validation/storage/DB path as a regular file upload.
 router.post("/youtube", async (req, res, next) => {
   const { url } = req.body as { url?: string };
   const tempId = crypto.randomUUID();

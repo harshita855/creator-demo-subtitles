@@ -1,46 +1,56 @@
 import type { Request, Response, NextFunction } from "express";
 import { Prisma } from "@prisma/client";
+import { createLogger } from "@subtitle-app/shared";
 import { AppError } from "../lib/errors";
+
+const logger = createLogger("api");
 
 export function errorHandler(
   err: unknown,
-  _req: Request,
+  req: Request,
   res: Response,
   _next: NextFunction
 ) {
   if (err instanceof AppError) {
+    logger.warn("Request failed", {
+      code: err.code,
+      statusCode: err.statusCode,
+      path: req.path,
+      method: req.method,
+    });
     return res.status(err.statusCode).json({
       error: { code: err.code, message: err.message },
     });
   }
 
-  // Prisma's known error codes - map the common ones to sensible HTTP
-  // responses instead of a generic 500, even if a route forgot to
-  // check existence before acting on a record.
   if (err instanceof Prisma.PrismaClientKnownRequestError) {
     if (err.code === "P2025") {
-      // "Record to update/delete does not exist"
+      logger.warn("Resource not found", { path: req.path, method: req.method });
       return res.status(404).json({
         error: { code: "E_NOT_FOUND", message: "The requested resource was not found." },
       });
     }
     if (err.code === "P2002") {
-      // Unique constraint violation
+      logger.warn("Duplicate resource", { path: req.path, method: req.method });
       return res.status(409).json({
         error: { code: "E_DUPLICATE_REQUEST", message: "This resource already exists." },
       });
     }
-    // Any other Prisma error - log detail server-side, never leak the
-    // raw Prisma message (it can contain table/column names) to the client.
-    console.error("[api] unhandled Prisma error:", err.code, err.message);
+    logger.error("Unhandled Prisma error", {
+      prismaCode: err.code,
+      prismaMessage: err.message,
+      path: req.path,
+    });
     return res.status(500).json({
       error: { code: "E_INTERNAL", message: "A database error occurred." },
     });
   }
 
-  // Unknown/unexpected error - log the real detail server-side only,
-  // never leak it to the client (no stack traces, no internals).
-  console.error("[api] unhandled error:", err);
+  logger.error("Unhandled error", {
+    message: err instanceof Error ? err.message : String(err),
+    path: req.path,
+    method: req.method,
+  });
   return res.status(500).json({
     error: { code: "E_INTERNAL", message: "An unexpected error occurred." },
   });

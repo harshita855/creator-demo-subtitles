@@ -6,15 +6,41 @@ import { prisma } from "./db/prisma";
 import { getTranscriptionProvider, getTranslationProvider } from "./providers";
 import { downloadFileFromStorage } from "./lib/storage";
 import { extractAudio } from "./lib/extractAudio";
-import type { TranslationProvider } from "@subtitle-app/shared";
+import { chunkAudio } from "./lib/chunkAudio";
+import { ProviderError } from "./lib/providerError";
+import { createLogger } from "@subtitle-app/shared";
+import type { TranslationProvider, TranscriptionProvider } from "@subtitle-app/shared";
 import type { TranscriptSegment } from "@subtitle-app/shared";
 
-const TRANSLATION_BATCH_SIZE = 5;
-const TRANSLATION_BATCH_DELAY_MS = 2000;
+const logger = createLogger("worker");
+const TRANSLATION_DELAY_MS = 2200;
+const JOB_TIMEOUT_MS = process.env.JOB_TIMEOUT_MINUTES
+  ? Number(process.env.JOB_TIMEOUT_MINUTES) * 60 * 1000
+  : 45 * 60 * 1000;
 
 export async function processJob(jobId: string): Promise<void> {
-  console.log(`[worker] starting job ${jobId}`);
+  logger.info("Starting job", { jobId });
 
+  await Promise.race([
+    runPipeline(jobId),
+    timeoutAfter(JOB_TIMEOUT_MS, jobId),
+  ]);
+}
+
+function timeoutAfter(ms: number, jobId: string): Promise<never> {
+  return new Promise((_, reject) => {
+    setTimeout(() => {
+      reject(
+        new ProviderError(
+          "E_PROCESSING_TIMEOUT",
+          `Processing did not complete within ${Math.round(ms / 60000)} minutes.`
+        )
+      );
+    }, ms);
+  });
+}
+
+async function runPipeline(jobId: string): Promise<void> {
   const job = await prisma.job.findUniqueOrThrow({
     where: { id: jobId },
     include: { upload: true },
@@ -24,6 +50,8 @@ export async function processJob(jobId: string): Promise<void> {
   const rawId = crypto.randomUUID();
   const rawFilePath = path.join(tempDir, `${rawId}-source`);
   const audioFilePath = path.join(tempDir, `${rawId}-audio.wav`);
+  const chunkDir = path.join(tempDir, `${rawId}-chunks`);
+  fs.mkdirSync(chunkDir, { recursive: true });
 
   try {
     await updateStatus(jobId, "extracting_audio", 15);
@@ -31,11 +59,11 @@ export async function processJob(jobId: string): Promise<void> {
     await extractAudio(rawFilePath, audioFilePath);
 
     await updateStatus(jobId, "transcribing", 40);
+    const chunks = await chunkAudio(audioFilePath, chunkDir);
+    logger.info("Audio split into chunks", { jobId, chunkCount: chunks.length });
+
     const transcriptionProvider = getTranscriptionProvider();
-    const segments = await transcriptionProvider.transcribe(
-      audioFilePath,
-      job.sourceLanguage
-    );
+    const segments = await transcribeChunks(chunks, transcriptionProvider, job.sourceLanguage, jobId);
 
     if (segments.length === 0) {
       throw new Error("Transcription returned no segments - no speech detected.");
@@ -46,7 +74,7 @@ export async function processJob(jobId: string): Promise<void> {
     if (job.translate) {
       await updateStatus(jobId, "translating", 65);
       const translationProvider = getTranslationProvider();
-      finalSegments = await translateInBatches(
+      finalSegments = await translateSequentially(
         segments,
         translationProvider,
         job.sourceLanguage,
@@ -82,23 +110,45 @@ export async function processJob(jobId: string): Promise<void> {
       data: { status: "completed", progress: 100, completedAt: new Date() },
     });
 
-    console.log(
-      `[worker] job ${jobId} completed - created project ${project.id} with ${finalSegments.length} segments`
-    );
+    logger.info("Job completed", {
+      jobId,
+      projectId: project.id,
+      segmentCount: finalSegments.length,
+    });
   } finally {
     fs.unlink(rawFilePath, () => {});
     fs.unlink(audioFilePath, () => {});
+    fs.rm(chunkDir, { recursive: true, force: true }, () => {});
   }
 }
 
-// Translates segments in small sequential batches rather than all at
-// once - Groq's free tier caps requests per minute (30 RPM as of this
-// writing), and firing every segment's translation in parallel via
-// Promise.all() blows through that limit on any video with more than
-// ~30 segments. Batching keeps us comfortably under the limit
-// regardless of video length, at the cost of taking a bit longer on
-// long videos - an acceptable trade-off for a free-tier-backed demo.
-async function translateInBatches(
+async function transcribeChunks(
+  chunks: { filePath: string; offsetSeconds: number }[],
+  provider: TranscriptionProvider,
+  sourceLanguage: string,
+  jobId: string
+): Promise<TranscriptSegment[]> {
+  const allSegments: TranscriptSegment[] = [];
+
+  for (let i = 0; i < chunks.length; i++) {
+    const chunk = chunks[i];
+    const chunkSegments = await provider.transcribe(chunk.filePath, sourceLanguage);
+
+    for (const s of chunkSegments) {
+      allSegments.push({
+        start: s.start + chunk.offsetSeconds,
+        end: s.end + chunk.offsetSeconds,
+        text: s.text,
+      });
+    }
+
+    logger.info("Transcribed chunk", { jobId, chunkIndex: i + 1, totalChunks: chunks.length });
+  }
+
+  return allSegments;
+}
+
+async function translateSequentially(
   segments: TranscriptSegment[],
   provider: TranslationProvider,
   sourceLanguage: string,
@@ -107,23 +157,21 @@ async function translateInBatches(
 ): Promise<Array<TranscriptSegment & { translatedText: string }>> {
   const results: Array<TranscriptSegment & { translatedText: string }> = [];
 
-  for (let i = 0; i < segments.length; i += TRANSLATION_BATCH_SIZE) {
-    const batch = segments.slice(i, i + TRANSLATION_BATCH_SIZE);
-    const batchResults = await Promise.all(
-      batch.map(async (s) => ({
-        ...s,
-        translatedText: await provider.translate(s.text, sourceLanguage, targetLanguage),
-      }))
-    );
-    results.push(...batchResults);
+  for (let i = 0; i < segments.length; i++) {
+    const s = segments[i];
+    const translatedText = await provider.translate(s.text, sourceLanguage, targetLanguage);
+    results.push({ ...s, translatedText });
 
-    console.log(
-      `[worker] job ${jobId} translated ${results.length}/${segments.length} segments`
-    );
+    if ((i + 1) % 5 === 0 || i === segments.length - 1) {
+      logger.info("Translation progress", {
+        jobId,
+        translated: i + 1,
+        total: segments.length,
+      });
+    }
 
-    // Skip the delay after the final batch - no point waiting once done.
-    if (i + TRANSLATION_BATCH_SIZE < segments.length) {
-      await new Promise((resolve) => setTimeout(resolve, TRANSLATION_BATCH_DELAY_MS));
+    if (i < segments.length - 1) {
+      await new Promise((resolve) => setTimeout(resolve, TRANSLATION_DELAY_MS));
     }
   }
 
@@ -139,5 +187,5 @@ async function updateStatus(
     where: { id: jobId },
     data: { status: status as never, progress },
   });
-  console.log(`[worker] job ${jobId} -> ${status} (${progress}%)`);
+  logger.info("Job status updated", { jobId, status, progress });
 }

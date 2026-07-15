@@ -5,10 +5,30 @@ import { getPresignedDownloadUrl } from "../lib/storage";
 import {
   UpdateSegmentRequestSchema,
   AddSegmentRequestSchema,
-  type ProjectResponse,
 } from "@subtitle-app/shared";
 
 const router = Router();
+
+// Spec §7 requires segments in snake_case (start, end, original_text,
+// translated_text) - the database columns are camelCase (Prisma
+// convention), so this is the single place that translates between
+// the two, used by every route below to keep the API response shape
+// consistent regardless of which endpoint produced it.
+function serializeSegment(s: {
+  id: string;
+  startTime: number;
+  endTime: number;
+  originalText: string;
+  translatedText: string;
+}) {
+  return {
+    id: s.id,
+    start: s.startTime,
+    end: s.endTime,
+    original_text: s.originalText,
+    translated_text: s.translatedText,
+  };
+}
 
 router.get("/:projectId", async (req, res, next) => {
   try {
@@ -25,25 +45,13 @@ router.get("/:projectId", async (req, res, next) => {
 
     const videoUrl = await getPresignedDownloadUrl(project.upload.storagePath);
 
-    const response: ProjectResponse = {
+    res.status(200).json({
       project_id: project.id,
       video_url: videoUrl,
       source_language: project.sourceLanguage,
       target_language: project.targetLanguage,
-      segments: project.segments.map((s) => ({
-        id: s.id,
-        projectId: s.projectId,
-        sequenceNumber: s.sequenceNumber,
-        startTime: s.startTime,
-        endTime: s.endTime,
-        originalText: s.originalText,
-        translatedText: s.translatedText,
-        createdAt: s.createdAt.toISOString(),
-        updatedAt: s.updatedAt.toISOString(),
-      })),
-    };
-
-    res.status(200).json(response);
+      segments: project.segments.map(serializeSegment),
+    });
   } catch (err) {
     next(err);
   }
@@ -85,17 +93,7 @@ router.post("/:projectId/segments", async (req, res, next) => {
       },
     });
 
-    res.status(201).json({
-      id: segment.id,
-      projectId: segment.projectId,
-      sequenceNumber: segment.sequenceNumber,
-      startTime: segment.startTime,
-      endTime: segment.endTime,
-      originalText: segment.originalText,
-      translatedText: segment.translatedText,
-      createdAt: segment.createdAt.toISOString(),
-      updatedAt: segment.updatedAt.toISOString(),
-    });
+    res.status(201).json(serializeSegment(segment));
   } catch (err) {
     next(err);
   }
@@ -141,17 +139,7 @@ router.patch("/:projectId/segments/:segmentId", async (req, res, next) => {
       },
     });
 
-    res.status(200).json({
-      id: updated.id,
-      projectId: updated.projectId,
-      sequenceNumber: updated.sequenceNumber,
-      startTime: updated.startTime,
-      endTime: updated.endTime,
-      originalText: updated.originalText,
-      translatedText: updated.translatedText,
-      createdAt: updated.createdAt.toISOString(),
-      updatedAt: updated.updatedAt.toISOString(),
-    });
+    res.status(200).json(serializeSegment(updated));
   } catch (err) {
     next(err);
   }

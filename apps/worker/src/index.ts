@@ -1,10 +1,11 @@
 import dotenv from "dotenv";
+import { createLogger } from "@subtitle-app/shared";
 import { startWorker } from "./queue/worker";
 
 dotenv.config();
 
-console.log("[worker] starting, connecting to queue...");
+const logger = createLogger("worker");
 
+logger.info("Worker starting, connecting to queue...");
 startWorker();
-
-console.log("[worker] listening for jobs");
+logger.info("Worker listening for jobs");

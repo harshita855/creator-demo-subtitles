@@ -99,3 +99,32 @@ changes to routes, the queue, or the frontend were needed.
   best candidate for unit tests, being pure functions with no I/O.
 - No CDN in front of video delivery.
 - YouTube URL import (a spec bonus feature) not yet implemented.
+
+## Bonus features implemented
+
+- **YouTube URL import** — paste a link instead of uploading a file;
+  downloaded server-side via yt-dlp.
+- **Automatic language detection** — Whisper's native auto-detect,
+  triggered by the "Auto-detect" spoken-language option.
+- **Bilingual subtitle export** — original and translated text on two
+  lines within the same subtitle block (our own convention, since no
+  single official bilingual SRT standard exists).
+
+## Additional reliability fixes made during real-world testing
+
+- **Groq free-tier rate limiting (30 req/min)**: discovered when a
+  32-segment video's translation step failed mid-job. Fixed by making
+  translation strictly sequential (one request at a time, ~2.2s apart)
+  and reducing worker concurrency to 1, so translation requests from
+  different jobs can never overlap and compound the rate against a
+  shared limit.
+- **Long-video transcription failures**: Whisper's API has a file-size
+  ceiling that a 20+ minute video's extracted audio can exceed. Fixed
+  with audio chunking (10-minute segments via ffmpeg's segment muxer),
+  with timestamps re-offset to the original timeline after
+  transcription - verified working on a real 20-minute video.
+- **API field-naming drift**: the database uses camelCase (Prisma
+  convention) but the spec requires snake_case in API responses
+  (`start`, `end`, `original_text`, `translated_text`). A single
+  serializer function in the projects route now enforces this
+  consistently across GET/POST/PATCH.

@@ -1,8 +1,11 @@
 import { Worker, type Job } from "bullmq";
-import { TRANSCRIPTION_QUEUE_NAME } from "@subtitle-app/shared";
+import { TRANSCRIPTION_QUEUE_NAME, createLogger } from "@subtitle-app/shared";
 import { getRedisConnectionOptions } from "./connection";
 import { processJob } from "../processJob";
 import { prisma } from "../db/prisma";
+import { ProviderError } from "../lib/providerError";
+
+const logger = createLogger("worker");
 
 interface JobPayload {
   jobId: string;
@@ -14,18 +17,25 @@ export function startWorker(): Worker {
     async (job: Job<JobPayload>) => {
       await processJob(job.data.jobId);
     },
-    { connection: getRedisConnectionOptions(), concurrency: 2 }
+    {
+      connection: getRedisConnectionOptions(),
+      concurrency: 1,
+    }
   );
 
   worker.on("failed", async (job, err) => {
-    console.error(`[worker] job ${job?.id} failed:`, err.message);
+    logger.error("Job failed", { jobId: job?.id, error: err.message });
     if (job?.data?.jobId) {
+      const code = err instanceof ProviderError ? err.code : "E_JOB_WORKER_FAILURE";
+      const message =
+        err instanceof ProviderError ? err.message : "Processing failed unexpectedly.";
+
       await prisma.job.update({
         where: { id: job.data.jobId },
         data: {
           status: "failed",
-          errorCode: "E_JOB_WORKER_FAILURE",
-          errorMessage: "Processing failed unexpectedly.",
+          errorCode: code,
+          errorMessage: message,
           retryCount: { increment: 1 },
         },
       });
@@ -33,7 +43,7 @@ export function startWorker(): Worker {
   });
 
   worker.on("completed", (job) => {
-    console.log(`[worker] BullMQ marked job ${job.id} as completed`);
+    logger.info("BullMQ marked job as completed", { jobId: job.id });
   });
 
   return worker;

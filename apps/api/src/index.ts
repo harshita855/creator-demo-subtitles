@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import multer from "multer";
+import { createLogger } from "@subtitle-app/shared";
 import uploadsRouter from "./routes/uploads";
 import { errorHandler } from "./middleware/errorHandler";
 import { ensureBucketExists } from "./lib/storage";
@@ -11,6 +12,7 @@ import exportRouter from "./routes/export";
 
 dotenv.config();
 
+const logger = createLogger("api");
 const app = express();
 const PORT = process.env.PORT ? Number(process.env.PORT) : 4000;
 
@@ -26,9 +28,6 @@ app.use("/api/jobs", jobsRouter);
 app.use("/api/projects", projectsRouter);
 app.use("/api/projects", exportRouter);
 
-// Catch any request that didn't match a real route above - keeps the
-// error shape consistent instead of falling through to Express's
-// default HTML 404 page.
 app.use((_req, res) => {
   res.status(404).json({
     error: { code: "E_NOT_FOUND", message: "The requested endpoint does not exist." },
@@ -43,6 +42,7 @@ app.use(
     next: express.NextFunction
   ) => {
     if (err instanceof multer.MulterError && err.code === "LIMIT_FILE_SIZE") {
+      logger.warn("Upload rejected - file too large", { path: req.path });
       return res.status(413).json({
         error: {
           code: "E_FILE_TOO_LARGE",
@@ -59,7 +59,7 @@ app.use(errorHandler);
 async function start() {
   await ensureBucketExists();
   app.listen(PORT, () => {
-    console.log(`[api] listening on port ${PORT}`);
+    logger.info("API server started", { port: PORT });
   });
 }
 

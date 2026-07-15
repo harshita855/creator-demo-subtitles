@@ -1,4 +1,4 @@
-import type { JobStatusResponse } from "./types";
+import type { JobStatusResponse, ProjectResponse, SubtitleSegment } from "./types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -10,7 +10,6 @@ export async function fetchJobStatus(jobId: string): Promise<JobStatusResponse> 
   }
   return res.json();
 }
-import type { ProjectResponse, SubtitleSegment } from "./types";
 
 export async function fetchProject(projectId: string): Promise<ProjectResponse> {
   const res = await fetch(`${API_URL}/api/projects/${projectId}`);
@@ -52,19 +51,47 @@ export interface CreateUploadResponse {
   status: string;
 }
 
-export async function uploadFile(file: File): Promise<CreateUploadResponse> {
-  const formData = new FormData();
-  formData.append("file", file);
+// Uses XMLHttpRequest instead of fetch() specifically because fetch's
+// request body has no progress event - XHR's upload.onprogress is the
+// only standard browser API that reports real bytes-sent progress
+// during an upload, which is what the spec's "upload progress"
+// requirement needs.
+export function uploadFile(
+  file: File,
+  onProgress?: (percent: number) => void
+): Promise<CreateUploadResponse> {
+  return new Promise((resolve, reject) => {
+    const formData = new FormData();
+    formData.append("file", file);
 
-  const res = await fetch(`${API_URL}/api/uploads`, {
-    method: "POST",
-    body: formData,
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", `${API_URL}/api/uploads`);
+
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable && onProgress) {
+        onProgress(Math.round((event.loaded / event.total) * 100));
+      }
+    };
+
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve(JSON.parse(xhr.responseText));
+      } else {
+        let message = `Upload failed with status ${xhr.status}`;
+        try {
+          const body = JSON.parse(xhr.responseText);
+          message = body?.error?.message ?? message;
+        } catch {
+          // response wasn't JSON - keep the generic message
+        }
+        reject(new Error(message));
+      }
+    };
+
+    xhr.onerror = () => reject(new Error("Upload failed due to a network error."));
+
+    xhr.send(formData);
   });
-  if (!res.ok) {
-    const body = await res.json().catch(() => null);
-    throw new Error(body?.error?.message ?? `Upload failed with status ${res.status}`);
-  }
-  return res.json();
 }
 
 export interface CreateJobResponse {
@@ -99,6 +126,32 @@ export async function uploadYoutubeUrl(url: string): Promise<CreateUploadRespons
   if (!res.ok) {
     const body = await res.json().catch(() => null);
     throw new Error(body?.error?.message ?? `YouTube import failed with status ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function deleteSegment(projectId: string, segmentId: string): Promise<void> {
+  const res = await fetch(`${API_URL}/api/projects/${projectId}/segments/${segmentId}`, {
+    method: "DELETE",
+  });
+  if (!res.ok && res.status !== 204) {
+    const body = await res.json().catch(() => null);
+    throw new Error(body?.error?.message ?? `Delete failed with status ${res.status}`);
+  }
+}
+
+export async function addSegment(
+  projectId: string,
+  data: { start: number; end: number; original_text: string; translated_text: string }
+): Promise<SubtitleSegment> {
+  const res = await fetch(`${API_URL}/api/projects/${projectId}/segments`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new Error(body?.error?.message ?? `Add segment failed with status ${res.status}`);
   }
   return res.json();
 }

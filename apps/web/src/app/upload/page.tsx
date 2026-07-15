@@ -17,6 +17,7 @@ export default function UploadPage() {
   const [targetLanguage, setTargetLanguage] = useState("en");
   const [translate, setTranslate] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const canSubmit = source === "file" ? !!file : youtubeUrl.trim().length > 0;
@@ -28,11 +29,12 @@ export default function UploadPage() {
     }
     setError(null);
     setIsSubmitting(true);
+    setUploadProgress(source === "file" ? 0 : null);
 
     try {
       const upload =
         source === "file"
-          ? await uploadFile(file!)
+          ? await uploadFile(file!, (percent) => setUploadProgress(percent))
           : await uploadYoutubeUrl(youtubeUrl.trim());
 
       const job = await createJob({
@@ -45,6 +47,7 @@ export default function UploadPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
       setIsSubmitting(false);
+      setUploadProgress(null);
     }
   }
 
@@ -58,7 +61,6 @@ export default function UploadPage() {
           Upload your video
         </h1>
 
-        {/* Source toggle */}
         <div
           className="mb-6 flex gap-1 rounded-full border p-1"
           style={{ borderColor: "var(--card-border)" }}
@@ -69,7 +71,8 @@ export default function UploadPage() {
               <button
                 key={opt}
                 onClick={() => setSource(opt)}
-                className="flex-1 rounded-full px-4 py-2 text-sm font-semibold transition-colors"
+                disabled={isSubmitting}
+                className="flex-1 rounded-full px-4 py-2 text-sm font-semibold transition-colors disabled:cursor-not-allowed"
                 style={{
                   backgroundColor: isActive ? "var(--accent)" : "transparent",
                   color: isActive ? "#fff" : "var(--text-secondary)",
@@ -102,6 +105,26 @@ export default function UploadPage() {
             />
             <p className="mt-1 text-xs" style={{ color: "var(--text-secondary)" }}>
               Works with regular videos and Shorts. Downloaded and processed on our server.
+            </p>
+          </div>
+        )}
+
+        {/* Upload progress bar - only meaningful for direct file uploads,
+            since YouTube imports download server-side with nothing to
+            report client-side until the API responds. */}
+        {uploadProgress !== null && (
+          <div className="mt-4">
+            <div
+              className="h-2 w-full overflow-hidden rounded-full"
+              style={{ backgroundColor: "var(--input-border)" }}
+            >
+              <div
+                className="h-full transition-all duration-200"
+                style={{ width: `${uploadProgress}%`, backgroundColor: "var(--accent)" }}
+              />
+            </div>
+            <p className="mt-1 text-xs" style={{ color: "var(--text-secondary)" }}>
+              {uploadProgress < 100 ? `Uploading... ${uploadProgress}%` : "Upload complete, starting processing..."}
             </p>
           </div>
         )}
