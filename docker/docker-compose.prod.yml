@@ -68,10 +68,9 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
-    volumes:
-      - ../apps/api:/app/apps/api
-      - ../packages/shared:/app/packages/shared
-      - api_node_modules:/app/apps/api/node_modules
+    # No source bind mounts - production runs purely on what's baked
+    # into the built image. Local dev uses docker-compose.yml instead,
+    # which has live-reload bind mounts.
 
   worker:
     build:
@@ -94,10 +93,6 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
-    volumes:
-      - ../apps/worker:/app/apps/worker
-      - ../packages/shared:/app/packages/shared
-      - worker_node_modules:/app/apps/worker/node_modules
 
   web:
     build:
@@ -110,13 +105,7 @@ services:
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
     depends_on:
       - api
-    volumes:
-      - ../apps/web:/app/apps/web
-      - web_node_modules:/app/apps/web/node_modules
 
 volumes:
   postgres_data:
   minio_data:
-  api_node_modules:
-  worker_node_modules:
-  web_node_modules:

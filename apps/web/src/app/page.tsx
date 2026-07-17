@@ -1,9 +1,17 @@
 import Link from "next/link";
+import Image from "next/image";
 
 export default function Home() {
   return (
     <main className="flex min-h-screen flex-col items-center px-6 pb-24 pt-24">
       <div className="w-full max-w-3xl text-center">
+        <Image
+          src="/logo.png"
+          alt="Company logo"
+          width={72}
+          height={72}
+          className="mx-auto mb-4 rounded-xl"
+        />
         <h1 className="text-4xl font-extrabold sm:text-5xl" style={{ color: "var(--text-primary)" }}>
           Subtitle Studio
         </h1>

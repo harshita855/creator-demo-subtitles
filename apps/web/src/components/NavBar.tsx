@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 
 const LINKS = [
@@ -17,10 +18,11 @@ export function NavBar() {
     >
       <Link
         href="/"
-        className="rounded-full px-3 py-1.5 text-sm font-bold"
+        className="flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-bold"
         style={{ color: "var(--text-primary)" }}
       >
-        🎬 Studio
+        <Image src="/logo.png" alt="Company logo" width={24} height={24} className="rounded" />
+        Studio
       </Link>
       {LINKS.map((link) => {
         const isActive = pathname === link.href || pathname.startsWith(link.href + "/");
